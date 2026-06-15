@@ -1,0 +1,214 @@
+-- Kịch bản: Bảng lệnh V1 Wizz (GUI Version)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+local LocalPlayer = Players.LocalPlayer
+
+-- Ngăn chặn tạo trùng lặp giao diện khi execute nhiều lần
+if game:GetService("CoreGui"):FindFirstChild("WizzMenuV1") then
+    game:GetService("CoreGui"):FindFirstChild("WizzMenuV1"):Destroy()
+end
+
+-- --- KHỞI TẠO CÁC BIẾN LOGIC ---
+local bamsatConnection = nil
+local targetBamsat = nil
+
+local function findPlayer(nameString)
+    if nameString == "" then return nil end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if string.sub(string.lower(player.Name), 1, string.len(nameString)) == string.lower(nameString) then
+            return player
+        end
+    end
+    return nil
+end
+
+local function stopBamsat()
+    if bamsatConnection then
+        bamsatConnection:Disconnect()
+        bamsatConnection = nil
+        targetBamsat = nil
+    end
+end
+
+-- --- KHỞI TẠO GIAO DIỆN (GUI) ---
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "WizzMenuV1"
+ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.ResetOnSpawn = false
+
+-- Khung chính (Main Frame)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 260, 0, 320)
+MainFrame.Position = UDim2.new(0.5, -130, 0.4, -160)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true -- Giúp giữ chuột kéo menu di chuyển trên màn hình
+MainFrame.Parent = ScreenGui
+
+-- Bo góc menu
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+-- Thanh Tiêu Đề (Title Bar)
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -40, 0, 40)
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Wizz lệnh v1"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 0, 127)
+TitleLabel.TextSize = 20
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = MainFrame
+
+-- Nút Thu Nhỏ (Minimize Button)
+local MiniButton = Instance.new("TextButton")
+MiniButton.Size = UDim2.new(0, 30, 0, 30)
+MiniButton.Position = UDim2.new(1, -35, 0, 5)
+MiniButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MiniButton.Text = "-"
+MiniButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MiniButton.TextSize = 18
+MiniButton.Font = Enum.Font.SourceSansBold
+MiniButton.Parent = MainFrame
+
+local MiniCorner = Instance.new("UICorner")
+MiniCorner.CornerRadius = UDim.new(0, 5)
+MiniCorner.Parent = MiniButton
+
+-- Khung chứa nội dung (Content) để ẩn/hiển thị khi thu nhỏ
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, 0, 1, -40)
+ContentFrame.Position = UDim2.new(0, 0, 0, 40)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+-- Ô nhập tên (TextBox)
+local NameInput = Instance.new("TextBox")
+NameInput.Size = UDim2.new(1, -30, 0, 35)
+NameInput.Position = UDim2.new(0, 15, 0, 10)
+NameInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+NameInput.BorderSizePixel = 0
+NameInput.PlaceholderText = "Nhập tên người chơi tại đây..."
+NameInput.Text = ""
+NameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+NameInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+NameInput.TextSize = 14
+NameInput.Font = Enum.Font.SourceSans
+NameInput.Parent = ContentFrame
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 6)
+InputCorner.Parent = NameInput
+
+-- Hàm tạo nút bấm nhanh (Button Template)
+local function createButton(text, pos, color, callback)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -30, 0, 35)
+    button.Position = pos
+    button.BackgroundColor3 = color
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 15
+    button.Font = Enum.Font.SourceSansBold
+    button.Parent = ContentFrame
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = button
+    
+    button.MouseButton1Click:Connect(callback)
+    return button
+end
+
+-- --- THIẾT LẬP CÁC NÚT LỆNH ---
+
+-- 1. Nút Bay Vút
+createButton("Bay Vút (bv)", UDim2.new(0, 15, 0, 60), Color3.fromRGB(180, 40, 40), function()
+    local target = findPlayer(NameInput.Text)
+    if target and target.Character then
+        local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+        if hrp and humanoid then
+            humanoid.Sit = false
+            task.wait(0.05)
+            for _, child in ipairs(hrp:GetChildren()) do
+                if child:IsA("BodyVelocity") then child:Destroy() end
+            end
+            local bv = Instance.new("BodyVelocity")
+            bv.Name = "WizzForceV1"
+            bv.Velocity = Vector3.new(0, 150, 0)
+            bv.MaxForce = Vector3.new(0, math.huge, 0)
+            bv.Parent = hrp
+            Debris:AddItem(bv, 3)
+        end
+    end
+end)
+
+-- 2. Nút Hủy Bay
+createButton("Hủy Bay Vút (unbv)", UDim2.new(0, 15, 0, 105), Color3.fromRGB(60, 60, 60), function()
+    local target = findPlayer(NameInput.Text)
+    if target and target.Character then
+        local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            for _, child in ipairs(hrp:GetChildren()) do
+                if child.Name == "WizzForceV1" or child:IsA("BodyVelocity") then
+                    child:Destroy()
+                end
+            end
+        end
+    end
+end)
+
+-- 3. Nút Bám Sát
+createButton("Bám Sát (bamsat)", UDim2.new(0, 15, 0, 150), Color3.fromRGB(40, 120, 40), function()
+    local target = findPlayer(NameInput.Text)
+    if target and target ~= LocalPlayer then
+        stopBamsat()
+        targetBamsat = target
+        bamsatConnection = RunService.Heartbeat:Connect(function()
+            if LocalPlayer.Character and targetBamsat.Character then
+                local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local targetHRP = targetBamsat.Character:FindFirstChild("HumanoidRootPart")
+                if myHRP and targetHRP then
+                    myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, 3)
+                end
+            end
+        end)
+    end
+end)
+
+-- 4. Nút Hủy Bám Sát
+createButton("Hủy Bám Sát (unbamsat)", UDim2.new(0, 15, 0, 195), Color3.fromRGB(120, 80, 20), function()
+    stopBamsat()
+end)
+
+-- --- LOGIC THU NHỎ / MỞ RỘNG MENU ---
+local isMinimized = false
+MiniButton.MouseButton1Click:Connect(function()
+    if not isMinimized then
+        ContentFrame.Visible = false
+        MainFrame:TweenSize(UDim2.new(0, 260, 0, 40), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.3, true)
+        MiniButton.Text = "+"
+        isMinimized = true
+    else
+        MainFrame:TweenSize(UDim2.new(0, 260, 0, 320), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.3, true, function()
+            ContentFrame.Visible = true
+        end)
+        MiniButton.Text = "-"
+        isMinimized = false
+    end
+end)
+
+-- Tự ngắt bám sát nếu đối phương out game
+Players.PlayerRemoving:Connect(function(player)
+    if targetBamsat and player == targetBamsat then
+        stopBamsat()
+    end
+      end
+loadstring(game:HttpGet("https://raw.githubusercontent.com/teoscrvn/T-ng-h-p-/refs/heads/main/teovip.txt", true))()
